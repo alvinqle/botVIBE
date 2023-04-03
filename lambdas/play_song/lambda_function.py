@@ -1,38 +1,87 @@
+import asyncio
+import json
 import os
 
 from discord.ext import commands, tasks
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
 import discord
 import youtube_dl
 
 DISCORD_API_TOKEN = os.environ['DISCORD_API_TOKEN']
+DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
 
 intents = discord.Intents().all()
 client = discord.Client(intents=intents)
 bot_vibe = commands.Bot(command_prefix='!', intents=intents)
 
+youtube_dl.utils.bug_reports_message = lambda: ''
+ytdl_format_options = {
+    'format': 'bestaudio/best',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0',
+}
+ffmpeg_options = {
+    'options': '-vn'
+}
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
-def handler(event, context):
-    intents = discord.Intents().all()
-    client = discord.Client(intents=intents)
-    bot_vibe = commands.Bot(command_prefix='!', intents=intents)
 
-    youtube_dl.utils.bug_reports_message = lambda: ''
-    ytdl_format_options = {
-        'format': 'bestaudio/best',
-        'restrictfilenames': True,
-        'noplaylist': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': False,
-        'quiet': True,
-        'no_warnings': True,
-        'default_search': 'auto',
-        'source_address': '0.0.0.0',
-    }
-    ffmpeg_options = {
-        'options': '-vn'
-    }
-    ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+def lambda_handler(event, context):
+    try:
+        body = json.loads(event['body'])
+        signature = event['headers']['x-signature-ed25519']
+        timestamp = event['headers']['x-signature-timestamp']
+
+        # validate the interaction
+        verify_key = VerifyKey(bytes.fromhex(DISCORD_PUBLIC_KEY))
+        message = timestamp + json.dumps(body, separators=(',', ':'))
+
+        try:
+            verify_key.verify(message.encode(), signature=bytes.fromhex(signature))
+        except BadSignatureError:
+            return {
+                'statusCode': 401,
+                'body': json.dumps('invalid request signature')
+            }
+
+        # handle the interaction
+        t = body['type']
+        if t == 1:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({
+                    'type': 1
+                })
+            }
+        elif t == 2:
+            return command_handler(body)
+        else:
+            return {
+                'statusCode': 400,
+                'body': json.dumps('unhandled request type')
+            }
+    except:
+        raise
+
+
+def command_handler(body):
+    command = body['data']['name']
+
+    if command == 'launch-botVIBE':
+        bot_vibe.run(DISCORD_API_TOKEN)
+    else:
+        return {
+            'statusCode': 400,
+            'body': json.dumps('unhandled command')
+        }
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -52,3 +101,63 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
         filename = data['title'] if stream else ytdl.prepare_filename(data)
         return filename
+
+
+@bot_vibe.command(name='play', help='To play song')
+async def play(ctx, url):
+    try:
+        server = ctx.message.guild
+        voice_channel = server.voice_client
+
+        async with ctx.typing():
+            filename = await YTDLSource.from_url(url, loop=bot_vibe.loop)
+            voice_channel.play(discord.FFmpegPCMAudio(source=filename, **ffmpeg_options))
+        await ctx.send('**Now playing:** {}'.format(filename))
+    except:
+        await ctx.send("The bot is not connected to a voice channel.")
+
+
+@bot_vibe.command(name='join', help='Tells the bot to join the voice channel')
+async def join(ctx):
+    if not ctx.message.author.voice:
+        await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
+        return
+    else:
+        channel = ctx.message.author.voice.channel
+    await channel.connect()
+
+
+@bot_vibe.command(name='pause', help='This command pauses the song')
+async def pause(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.pause()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
+
+
+@bot_vibe.command(name='resume', help='Resumes the song')
+async def resume(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_paused():
+        await voice_client.resume()
+    else:
+        await ctx.send("The bot was not playing anything before this. Use play_song command")
+
+
+@bot_vibe.command(name='leave', help='To make the bot leave the voice channel')
+async def leave(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_connected():
+        await voice_client.disconnect()
+    else:
+        await ctx.send("The bot is not connected to a voice channel.")
+
+
+@bot_vibe.command(name='stop', help='Stops the song')
+async def stop(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.stop()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
