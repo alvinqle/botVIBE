@@ -6,7 +6,7 @@ from discord.ext import commands, tasks
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
 import discord
-import youtube_dl
+import yt_dlp as youtube_dl
 
 DISCORD_API_TOKEN = os.environ['DISCORD_API_TOKEN']
 DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
@@ -99,7 +99,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
-        filename = data['title'] if stream else ytdl.prepare_filename(data)
+        filename = data['title']
         return filename
 
 
@@ -112,15 +112,15 @@ async def play(ctx, url):
         async with ctx.typing():
             filename = await YTDLSource.from_url(url, loop=bot_vibe.loop)
             voice_channel.play(discord.FFmpegPCMAudio(source=filename, **ffmpeg_options))
-        await ctx.send('**Now playing:** {}'.format(filename))
-    except:
-        await ctx.send("The bot is not connected to a voice channel.")
+        await ctx.send(f'**Now playing:** {filename}')
+    except Exception as e:
+        await ctx.send(str(e))
 
 
 @bot_vibe.command(name='join', help='Tells the bot to join the voice channel')
 async def join(ctx):
     if not ctx.message.author.voice:
-        await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
+        await ctx.send(f'{ctx.message.author.name} is not connected to a voice channel')
         return
     else:
         channel = ctx.message.author.voice.channel
@@ -133,7 +133,7 @@ async def pause(ctx):
     if voice_client.is_playing():
         await voice_client.pause()
     else:
-        await ctx.send("The bot is not playing anything at the moment.")
+        await ctx.send('I am not playing anything at the moment. Play a song with the !play command.')
 
 
 @bot_vibe.command(name='resume', help='Resumes the song')
@@ -142,7 +142,7 @@ async def resume(ctx):
     if voice_client.is_paused():
         await voice_client.resume()
     else:
-        await ctx.send("The bot was not playing anything before this. Use play_song command")
+        await ctx.send('I was not playing anything before this. Play a song with the !play command.')
 
 
 @bot_vibe.command(name='leave', help='To make the bot leave the voice channel')
@@ -151,7 +151,7 @@ async def leave(ctx):
     if voice_client.is_connected():
         await voice_client.disconnect()
     else:
-        await ctx.send("The bot is not connected to a voice channel.")
+        await ctx.send('I am not connected to a voice channel. Connect me to your channel with the !join command.')
 
 
 @bot_vibe.command(name='stop', help='Stops the song')
@@ -160,4 +160,4 @@ async def stop(ctx):
     if voice_client.is_playing():
         await voice_client.stop()
     else:
-        await ctx.send("The bot is not playing anything at the moment.")
+        await ctx.send('I am not playing anything at the moment. Play a song with the !play command.')
