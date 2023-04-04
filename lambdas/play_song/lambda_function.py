@@ -17,6 +17,7 @@ bot_vibe = commands.Bot(command_prefix='!', intents=intents)
 
 youtube_dl.utils.bug_reports_message = lambda: ''
 ytdl_format_options = {
+    'outtmpl': '/tmp/%(title)s-%(id)s.%(ext)s',
     'format': 'bestaudio/best',
     'restrictfilenames': True,
     'noplaylist': True,
@@ -75,7 +76,7 @@ def lambda_handler(event, context):
 def command_handler(body):
     command = body['data']['name']
 
-    if command == 'launch-botVIBE':
+    if command == 'botvibe':
         bot_vibe.run(DISCORD_API_TOKEN)
     else:
         return {
@@ -95,12 +96,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
-        filename = data['title']
-        return filename
+        url, title = data['url'], data['title']
+        return url, title
 
 
 @bot_vibe.command(name='play', help='To play song')
@@ -110,9 +111,9 @@ async def play(ctx, url):
         voice_channel = server.voice_client
 
         async with ctx.typing():
-            filename = await YTDLSource.from_url(url, loop=bot_vibe.loop)
-            voice_channel.play(discord.FFmpegPCMAudio(source=filename, **ffmpeg_options))
-        await ctx.send(f'**Now playing:** {filename}')
+            url, title = await YTDLSource.from_url(url, loop=bot_vibe.loop)
+            voice_channel.play(discord.FFmpegPCMAudio(source=url, **ffmpeg_options))
+        await ctx.send(f'**Now playing:** {title}')
     except Exception as e:
         await ctx.send(str(e))
 
