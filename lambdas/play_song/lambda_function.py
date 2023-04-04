@@ -8,6 +8,8 @@ from nacl.exceptions import BadSignatureError
 import discord
 import yt_dlp as youtube_dl
 
+from helpers.dynamodb_client import check_session, update_session
+
 DISCORD_API_TOKEN = os.environ['DISCORD_API_TOKEN']
 DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
 
@@ -17,7 +19,6 @@ bot_vibe = commands.Bot(command_prefix='!', intents=intents)
 
 youtube_dl.utils.bug_reports_message = lambda: ''
 ytdl_format_options = {
-    'outtmpl': '/tmp/%(title)s-%(id)s.%(ext)s',
     'format': 'bestaudio/best',
     'restrictfilenames': True,
     'noplaylist': True,
@@ -77,11 +78,20 @@ def command_handler(body):
     command = body['data']['name']
 
     if command == 'botvibe':
-        bot_vibe.run(DISCORD_API_TOKEN)
+        is_bot_active = check_session(bot_name='botVIBE')
+        if is_bot_active:
+            return {
+                'statusCode': 200,
+                'body': json.dumps("botVIBE is already running. Have it !join the channel you're currently in.")
+            }
+        else:
+            print('Starting botVIBE...')
+            update_session(bot_name='botVIBE', active=True)
+            bot_vibe.run(DISCORD_API_TOKEN)
     else:
         return {
             'statusCode': 400,
-            'body': json.dumps('unhandled command')
+            'body': json.dumps('Unhandled command')
         }
 
 
@@ -112,7 +122,7 @@ async def play(ctx, url):
 
         async with ctx.typing():
             url, title = await YTDLSource.from_url(url, loop=bot_vibe.loop)
-            voice_channel.play(discord.FFmpegPCMAudio(source=url, **ffmpeg_options))
+            voice_channel.play(discord.FFmpegPCMAudio(source=url, executable='/opt/bin/ffmpeg', **ffmpeg_options))
         await ctx.send(f'**Now playing:** {title}')
     except Exception as e:
         await ctx.send(str(e))
@@ -162,3 +172,9 @@ async def stop(ctx):
         await voice_client.stop()
     else:
         await ctx.send('I am not playing anything at the moment. Play a song with the !play command.')
+
+
+@bot_vibe.command(name='shutdown', help='Stops the bot entirely')
+async def shutdown(ctx):
+    update_session(bot_name='botVIBE', active=False)
+    exit()
