@@ -1,13 +1,14 @@
+import asyncio
 import json
 import os
 
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
 
-from helpers.bot_client import run_bot
+from helpers.bot_client import run_bot, setup_bot
 from helpers.dynamodb_client import check_session, update_session
 
-DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
+# DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
 
 
 def lambda_handler(event, context):
@@ -70,3 +71,8 @@ def command_handler(body):
             'statusCode': 400,
             'body': json.dumps('Unhandled command')
         }
+
+
+if __name__ == '__main__':
+    asyncio.run(setup_bot())
+    run_bot()

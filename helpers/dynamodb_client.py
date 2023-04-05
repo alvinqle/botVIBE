@@ -1,6 +1,6 @@
 import boto3
 
-dynamodb = boto3.resource('dynamodb')
+dynamodb = boto3.resource('dynamodb', region_name='us-west-1')
 
 
 def check_session(bot_name: str) -> bool:
