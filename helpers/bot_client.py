@@ -53,31 +53,33 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 class GeneralCommands(commands.Cog, name='General Commands'):
 
-    def __init(self, bot):
-        self.bot = bot
-
     @commands.command(name='join', help='Commands botVIBE to join the voice channel')
     async def join(self, ctx):
-        if not ctx.message.author.voice:
-            await ctx.send(f'{ctx.message.author.name} is not connected to a voice channel')
-            return
-        else:
-            channel = ctx.message.author.voice.channel
-        await channel.connect()
+        try:
+            if not ctx.message.author.voice:
+                await ctx.send(f'You are not connected to a voice channel.')
+                return
+            else:
+                channel = ctx.message.author.voice.channel
+            await channel.connect()
+        except Exception as e:
+            await ctx.send(str(e))
 
     @commands.command(name='leave', help='Commands botVIBE to leave the channel')
     async def leave(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_connected():
-            await voice_client.disconnect()
-        else:
-            await ctx.send('I am not connected to a voice channel. Connect me to your channel with the !join command.')
+        try:
+            voice_client = ctx.message.guild.voice_client
+            if voice_client.is_connected():
+                await voice_client.disconnect()
+            else:
+                await ctx.send('I am not connected to a voice channel. Connect me to your channel with !join.')
+        except Exception as e:
+            await ctx.send(str(e))
 
 
 class AudioCommands(commands.Cog, name='Audio Commands'):
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self):
         self.general_commands = GeneralCommands()
 
     @commands.command(name='play', help='Takes in a url to a video and plays the audio')
@@ -98,145 +100,194 @@ class AudioCommands(commands.Cog, name='Audio Commands'):
 
     @commands.command(name='pause', help='Pauses any currently playing audio')
     async def pause(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_playing():
-            await voice_client.pause()
-        else:
-            await ctx.send('I am not playing anything at the moment. Play a song with the !play [url] command.')
+        try:
+            voice_client = ctx.message.guild.voice_client
+            if voice_client.is_playing():
+                await voice_client.pause()
+            else:
+                await ctx.send('I am not playing anything at the moment. Play a song with !play [url].')
+        except Exception as e:
+            await ctx.send(str(e))
 
     @commands.command(name='resume', help='Resumes any paused audio')
     async def resume(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_paused():
-            await voice_client.resume()
-        else:
-            await ctx.send('I was not playing anything before this. Play a song with the !play [url] command.')
+        try:
+            voice_client = ctx.message.guild.voice_client
+            if voice_client.is_paused():
+                await voice_client.resume()
+            else:
+                await ctx.send('I am not playing anything at the moment. Play a song with !play [url].')
+        except Exception as e:
+            await ctx.send(str(e))
 
     @commands.command(name='stop', help='Stops any currently playing or paused audio')
     async def stop(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_playing():
-            await voice_client.stop()
-        else:
-            await ctx.send('I am not playing anything at the moment. Play a song with the !play [url] command.')
+        try:
+            voice_client = ctx.message.guild.voice_client
+            if voice_client.is_playing():
+                await voice_client.stop()
+            else:
+                await ctx.send('I am not playing anything at the moment. Play a song with !play [url].')
+        except Exception as e:
+            await ctx.send(str(e))
 
 
 class MemberCommands(commands.Cog, name='Member Commands'):
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.general_commands = GeneralCommands()
-
-    @bot_vibe.command(name='movedown', help='Moves tagged users down one voice channel')
+    @commands.command(name='movedown', help='Moves tagged users down one voice channel')
     @commands.has_any_role('admin')
     async def movedown(self, ctx, *, msg):
-        channel = ctx.message.author.voice.channel
-        channel_index = channel.guild.voice_channels.index(channel)
-        if channel_index == len(channel.guild.voice_channels) - 1:
-            await ctx.send(f'Cannot move users up a channel from the top channel')
-        else:
+        try:
             users = msg.replace('!', '') \
                 .replace('<', '') \
                 .replace('@', '') \
                 .replace('>', '').split(' ')
             for user in users:
                 member = ctx.guild.get_member(int(user))
+                if member.voice is None:
+                    await ctx.send(f'{member.name} is not online.')
+                    continue
                 current_channel_index = ctx.guild.voice_channels.index(member.voice.channel)
-                await member.move_to(channel.guild.voice_channels[current_channel_index + 1])
+                if current_channel_index == len(ctx.guild.voice_channels) - 1:
+                    await ctx.send(f'Cannot move {member.name} down a channel from the bottom channel.')
+                    continue
+                await member.move_to(ctx.guild.voice_channels[current_channel_index + 1])
+        except Exception as e:
+            await ctx.send(str(e))
 
-    @bot_vibe.command(name='movehere', help='Moves tagged users to the channel the author is connected to')
+    @commands.command(name='movehere', help='Moves tagged users to the channel the author is connected to')
     @commands.has_any_role('admin')
     async def movehere(self, ctx, *, msg):
-        channel = ctx.message.author.voice.channel
-        channel_index = channel.guild.voice_channels.index(channel)
-        if channel_index == len(channel.guild.voice_channels) - 1:
-            await ctx.send(f'Cannot move users up a channel from the top channel')
-        else:
+        try:
+            if not ctx.message.author.voice:
+                await ctx.send(f'{ctx.message.author.name} is not connected to a voice channel')
+                return
+            current_channel = ctx.message.author.voice.channel
             users = msg.replace('!', '') \
                 .replace('<', '') \
                 .replace('@', '') \
                 .replace('>', '').split(' ')
-            for user in users:
-                member = ctx.guild.get_member(int(user))
-                await member.move_to(channel)
+            if users[0].isnumeric():
+                for user in users:
+                    member = ctx.guild.get_member(int(user))
+                    if member.voice is None:
+                        await ctx.send(f'{member.name} is not online.')
+                        continue
+                    await member.move_to(current_channel)
+            else:
+                if users[0] not in _list_voice_channels(ctx):
+                    await ctx.send(f'{users[0]} is not a valid voice channel')
+                    return
+                prev_channel = discord.utils.get(ctx.guild.voice_channels, name=users[0])
+                for member in prev_channel.members:
+                    if member.voice is None:
+                        await ctx.send(f'{member.name} is not online.')
+                        continue
+                    await member.move_to(current_channel)
+        except Exception as e:
+            await ctx.send(str(e))
 
-    @bot_vibe.command(name='moveto', help='Moves tagged users up one voice channel')
+    @commands.command(name='moveto', help='Moves tagged users up one voice channel')
     @commands.has_any_role('admin')
     async def moveto(self, ctx, *, msg):
-        new_channel, users = msg.split('"')[1], msg.split('"')[2]
-        users = users.replace(' ', '') \
-            .replace('!', '') \
-            .replace('<', '') \
-            .replace('@', '') \
-            .replace('>', '').split(' ')
-        for user in users:
-            member = ctx.guild.get_member(int(user))
-            new_channel = discord.utils.get(ctx.guild.voice_channels, name=new_channel)
-            await member.move_to(new_channel)
+        try:
+            new_channel, users = msg.split('"')[1], msg.split('"')[2]
+            if new_channel not in _list_voice_channels(ctx):
+                await ctx.send(f'{new_channel} is not a valid voice channel')
+                return
+            users = users.replace(' ', '') \
+                .replace('!', '') \
+                .replace('<', '') \
+                .replace('@', '') \
+                .replace('>', '').split(' ')
+            for user in users:
+                member = ctx.guild.get_member(int(user))
+                if member.voice is None:
+                    await ctx.send(f'{member.name} is not online.')
+                    continue
+                new_channel = discord.utils.get(ctx.guild.voice_channels, name=new_channel)
+                await member.move_to(new_channel)
+        except Exception as e:
+            await ctx.send(str(e))
 
-    @bot_vibe.command(name='moveup', help='Moves tagged users up one voice channel')
+    @commands.command(name='moveup', help='Moves tagged users up one voice channel')
     @commands.has_any_role('admin')
     async def moveup(self, ctx, *, msg):
-        channel = ctx.message.author.voice.channel
-        channel_index = channel.guild.voice_channels.index(channel)
-        if channel_index == 0:
-            await ctx.send(f'Cannot move users up a channel from the top channel')
-        else:
+        try:
             users = msg.replace('!', '') \
                 .replace('<', '') \
                 .replace('@', '') \
                 .replace('>', '').split(' ')
             for user in users:
                 member = ctx.guild.get_member(int(user))
+                if member.voice is None:
+                    await ctx.send(f'{member.name} is not online.')
+                    continue
                 current_channel_index = ctx.guild.voice_channels.index(member.voice.channel)
-                await member.move_to(channel.guild.voice_channels[current_channel_index - 1])
+                if current_channel_index == 0:
+                    await ctx.send(f'Cannot move {member.name} up a channel from the top channel.')
+                    continue
+                await member.move_to(ctx.guild.voice_channels[current_channel_index - 1])
+        except Exception as e:
+            await ctx.send(str(e))
 
 
 class MiscellaneousCommands(commands.Cog, name='Miscellaneous Commands'):
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.general_commands = GeneralCommands()
-
     @commands.command(name='flip', help='Flips a coin and returns the result')
     async def flip(self, ctx, number=1):
-        if number not in {1, 3, 5, 7, 9}:
-            await ctx.send('Please input an odd number between 0 and 10')
-        else:
-            await ctx.send(f'Flipping a coin {number} time(s)...')
-            heads, tails = 0, 0
-            for i in range(number):
-                result = random.randint(0, 1)
-                if result == 0:
-                    heads += 1
-                    if heads > (number // 2):
-                        break
-                else:
-                    tails += 1
-                    if tails > (number // 2):
-                        break
-            await asyncio.sleep(2)
-            if heads > tails:
-                await ctx.send(f'Heads wins! {heads} to {tails}')
+        try:
+            if number not in {1, 3, 5, 7, 9}:
+                await ctx.send('Please input an odd number between 0 and 10')
             else:
-                await ctx.send(f'Tails wins! {tails} to {heads}')
+                await ctx.send(f'Flipping a coin {number} time(s)...')
+                heads, tails = 0, 0
+                for i in range(number):
+                    result = random.randint(0, 1)
+                    if result == 0:
+                        heads += 1
+                        if heads > (number // 2):
+                            break
+                    else:
+                        tails += 1
+                        if tails > (number // 2):
+                            break
+                await asyncio.sleep(2)
+                if heads > tails:
+                    await ctx.send(f'Heads wins! {heads} to {tails}')
+                else:
+                    await ctx.send(f'Tails wins! {tails} to {heads}')
+        except Exception as e:
+            await ctx.send(str(e))
 
 
 @bot_vibe.command(name='ping', help='pong')
 async def ping(ctx):
-    await ctx.send(f'pong | {round(bot_vibe.latency) * 1000} ms')
+    try:
+        await ctx.send(f'pong | {round(bot_vibe.latency) * 1000} ms')
+    except Exception as e:
+        await ctx.send(str(e))
 
 
 @bot_vibe.command(name='shutdown', help='Shuts down the bot entirely - use /botvibe to restart the bot')
 async def shutdown(ctx):
-    update_session(bot_name='botVIBE', active=False)
-    exit()
+    try:
+        update_session(bot_name='botVIBE', active=False)
+        exit()
+    except Exception as e:
+        await ctx.send(str(e))
+        exit()
+
+
+def _list_voice_channels(ctx):
+    return [channel.name for channel in ctx.guild.voice_channels]
 
 
 async def setup_bot():
-    await bot_vibe.add_cog(GeneralCommands(bot_vibe))
-    await bot_vibe.add_cog(AudioCommands(bot_vibe))
-    await bot_vibe.add_cog(MiscellaneousCommands(bot_vibe))
+    await bot_vibe.add_cog(GeneralCommands())
+    await bot_vibe.add_cog(AudioCommands())
+    await bot_vibe.add_cog(MemberCommands())
+    await bot_vibe.add_cog(MiscellaneousCommands())
 
 
 def run_bot():
