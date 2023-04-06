@@ -290,6 +290,22 @@ class MiscellaneousCommands(commands.Cog, name='Miscellaneous Commands'):
         except Exception as e:
             await ctx.send(str(e))
 
+    @commands.command(name='roll', help='Rolls a dice of your choosing')
+    async def roll(self, ctx, number=1, dice_size="D6"):
+        total=0
+        try:
+            await ctx.send(f'Rolling a {dice_size} {number}time(s)...')
+            for i in range(number):
+                result = random.randint(1, int(dice_size.lower().replace("d","")))
+                total+=result
+                await ctx.send("You rolled a "+ str(result))
+            await asyncio.sleep(1)
+            await ctx.send(f'Your total rolls equal {total}')
+        except Exception as e:
+            await ctx.send(str(e))
+
+
+
     @commands.command(name='pick', help='Picks a random game to play based on the amount of players in a channel')
     async def pick(self, ctx):
         try:
