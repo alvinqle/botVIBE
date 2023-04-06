@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import random
 
 from discord.ext import commands
@@ -7,7 +9,7 @@ import yt_dlp as youtube_dl
 
 from helpers.dynamodb_client import update_session
 
-# DISCORD_API_TOKEN = os.environ['DISCORD_API_TOKEN']
+DISCORD_API_TOKEN = os.environ['DISCORD_API_TOKEN']
 
 intents = discord.Intents().all()
 client = discord.Client(intents=intents)
@@ -88,13 +90,18 @@ class AudioCommands(commands.Cog, name='Audio Commands'):
         try:
             voice_client = discord.utils.get(ctx.bot.voice_clients, guild=ctx.guild)
             if not (voice_client and voice_client.is_connected()):
-                await self.general_commands.join(ctx)
+                await self.general_commands.join(self, ctx)
             server = ctx.message.guild
             voice_channel = server.voice_client
             async with ctx.typing():
                 url, title = await YTDLSource.from_url(url, loop=bot_vibe.loop)
                 voice_channel.play(discord.FFmpegPCMAudio(source=url, executable='ffmpeg.exe', **ffmpeg_options))
             await ctx.send(f'**Now playing:** {title}')
+            while True:
+                await asyncio.sleep(1)
+                if not voice_channel.is_playing():
+                    await voice_channel.disconnect()
+                    break
         except Exception as e:
             await ctx.send(str(e))
 
@@ -145,7 +152,7 @@ class MemberCommands(commands.Cog, name='Member Commands'):
             for user in users:
                 member = ctx.guild.get_member(int(user))
                 if member.voice is None:
-                    await ctx.send(f'{member.name} is not online.')
+                    await ctx.send(f'{member.name} is not in any voice channel.')
                     continue
                 current_channel_index = ctx.guild.voice_channels.index(member.voice.channel)
                 if current_channel_index == len(ctx.guild.voice_channels) - 1:
@@ -153,62 +160,81 @@ class MemberCommands(commands.Cog, name='Member Commands'):
                     continue
                 await member.move_to(ctx.guild.voice_channels[current_channel_index + 1])
         except Exception as e:
-            await ctx.send(str(e))
+            await ctx.send(f'ERROR: {str(e)}')
 
     @commands.command(name='movehere', help='Moves tagged users to the channel the author is connected to')
     @commands.has_any_role('admin')
     async def movehere(self, ctx, *, msg):
         try:
             if not ctx.message.author.voice:
-                await ctx.send(f'{ctx.message.author.name} is not connected to a voice channel')
+                await ctx.send(f'{ctx.message.author.name} is not connected to a voice channel.')
                 return
             current_channel = ctx.message.author.voice.channel
-            users = msg.replace('!', '') \
-                .replace('<', '') \
-                .replace('@', '') \
-                .replace('>', '').split(' ')
-            if users[0].isnumeric():
+            prev_channel_name = None
+            if '"' in msg:
+                prev_channel_name = msg.split('"')[1]
+            else:
+                users = msg.replace('!', '') \
+                    .replace('<', '') \
+                    .replace('@', '') \
+                    .replace('>', '').split(' ')
+            if not prev_channel_name:
                 for user in users:
                     member = ctx.guild.get_member(int(user))
                     if member.voice is None:
-                        await ctx.send(f'{member.name} is not online.')
+                        await ctx.send(f'{member.name} is not in any voice channel.')
                         continue
                     await member.move_to(current_channel)
             else:
-                if users[0] not in _list_voice_channels(ctx):
-                    await ctx.send(f'{users[0]} is not a valid voice channel')
+                if prev_channel_name not in _list_voice_channels(ctx):
+                    await ctx.send(f'{prev_channel_name} is not a valid voice channel.')
                     return
-                prev_channel = discord.utils.get(ctx.guild.voice_channels, name=users[0])
+                prev_channel = discord.utils.get(ctx.guild.voice_channels, name=prev_channel_name)
                 for member in prev_channel.members:
                     if member.voice is None:
-                        await ctx.send(f'{member.name} is not online.')
+                        await ctx.send(f'{member.name} is not in any voice channel.')
                         continue
                     await member.move_to(current_channel)
         except Exception as e:
-            await ctx.send(str(e))
+            await ctx.send(f'ERROR: {str(e)}\nUsage: !movehere "CHANNEL_NAME" or !movehere @USER_NAME')
 
     @commands.command(name='moveto', help='Moves tagged users up one voice channel')
     @commands.has_any_role('admin')
     async def moveto(self, ctx, *, msg):
         try:
-            new_channel, users = msg.split('"')[1], msg.split('"')[2]
-            if new_channel not in _list_voice_channels(ctx):
-                await ctx.send(f'{new_channel} is not a valid voice channel')
+            new_channel_name, users = msg.split('"')[1], msg.split('"')[2]
+            if new_channel_name not in _list_voice_channels(ctx):
+                await ctx.send(f'{new_channel_name} is not a valid voice channel.')
                 return
-            users = users.replace(' ', '') \
-                .replace('!', '') \
-                .replace('<', '') \
-                .replace('@', '') \
-                .replace('>', '').split(' ')
-            for user in users:
-                member = ctx.guild.get_member(int(user))
-                if member.voice is None:
-                    await ctx.send(f'{member.name} is not online.')
-                    continue
-                new_channel = discord.utils.get(ctx.guild.voice_channels, name=new_channel)
-                await member.move_to(new_channel)
+            new_channel = discord.utils.get(ctx.guild.voice_channels, name=new_channel_name)
+            prev_channel_name = None
+            if users == ' ':
+                prev_channel_name = msg.split('"')[3]
+            else:
+                users = users.lstrip(' ') \
+                    .replace('!', '') \
+                    .replace('<', '') \
+                    .replace('@', '') \
+                    .replace('>', '').split(' ')
+            if not prev_channel_name:
+                for user in users:
+                    member = ctx.guild.get_member(int(user))
+                    if member.voice is None:
+                        await ctx.send(f'{member.name} is not online.')
+                        continue
+                    await member.move_to(new_channel)
+            else:
+                if prev_channel_name not in _list_voice_channels(ctx):
+                    await ctx.send(f'{prev_channel_name} is not a valid voice channel.')
+                    return
+                prev_channel = discord.utils.get(ctx.guild.voice_channels, name=prev_channel_name)
+                for member in prev_channel.members:
+                    if member.voice is None:
+                        await ctx.send(f'{member.name} is not in any voice channel.')
+                        continue
+                    await member.move_to(new_channel)
         except Exception as e:
-            await ctx.send(str(e))
+            await ctx.send(f'ERROR: {str(e)}\nUsage: !moveto "CHANNEL_NAME" @USER_NAME')
 
     @commands.command(name='moveup', help='Moves tagged users up one voice channel')
     @commands.has_any_role('admin')
@@ -221,7 +247,7 @@ class MemberCommands(commands.Cog, name='Member Commands'):
             for user in users:
                 member = ctx.guild.get_member(int(user))
                 if member.voice is None:
-                    await ctx.send(f'{member.name} is not online.')
+                    await ctx.send(f'{member.name} is not in any voice channel.')
                     continue
                 current_channel_index = ctx.guild.voice_channels.index(member.voice.channel)
                 if current_channel_index == 0:
@@ -229,16 +255,20 @@ class MemberCommands(commands.Cog, name='Member Commands'):
                     continue
                 await member.move_to(ctx.guild.voice_channels[current_channel_index - 1])
         except Exception as e:
-            await ctx.send(str(e))
+            await ctx.send(f'ERROR{str(e)}')
 
 
 class MiscellaneousCommands(commands.Cog, name='Miscellaneous Commands'):
+
+    def __init__(self):
+        self.audio_commands = AudioCommands()
+        self.general_commands = GeneralCommands()
 
     @commands.command(name='flip', help='Flips a coin and returns the result')
     async def flip(self, ctx, number=1):
         try:
             if number not in {1, 3, 5, 7, 9}:
-                await ctx.send('Please input an odd number between 0 and 10')
+                await ctx.send('Please input an odd number between 0 and 10.')
             else:
                 await ctx.send(f'Flipping a coin {number} time(s)...')
                 heads, tails = 0, 0
@@ -252,11 +282,35 @@ class MiscellaneousCommands(commands.Cog, name='Miscellaneous Commands'):
                         tails += 1
                         if tails > (number // 2):
                             break
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
                 if heads > tails:
                     await ctx.send(f'Heads wins! {heads} to {tails}')
                 else:
                     await ctx.send(f'Tails wins! {tails} to {heads}')
+        except Exception as e:
+            await ctx.send(str(e))
+
+    @commands.command(name='pick', help='Picks a random game to play based on the amount of players in a channel')
+    async def pick(self, ctx):
+        try:
+            current_channel = ctx.message.author.voice.channel
+            player_count = len(current_channel.members)
+            with open('./config/games.json') as games_file:
+                games_list = json.load(games_file)
+            potential_games = []
+            for max_player_count, games in games_list['max_player_count'].items():
+                if player_count < int(max_player_count):
+                    potential_games.extend(games)
+            await asyncio.sleep(1)
+            await ctx.send(f'Why not play {potential_games[random.randint(0, len(potential_games) - 1)]}?')
+        except Exception as e:
+            await ctx.send(f'ERROR: {str(e)}')
+
+    @commands.command(name='womp')
+    async def womp(self, ctx):
+        try:
+            await self.general_commands.join(self, ctx)
+            await self.audio_commands.play(self, ctx, url='https://www.youtube.com/watch?v=CQeezCdF4mk')
         except Exception as e:
             await ctx.send(str(e))
 
@@ -291,4 +345,4 @@ async def setup_bot():
 
 
 def run_bot():
-    bot_vibe.run('ODAwNjMxMDk3ODY4MTU2OTQ4.GhdafG.oQmqj_1RsrpQhJ_12QG0z3FiPidsfOjlHdWLlo')
+    bot_vibe.run(DISCORD_API_TOKEN)

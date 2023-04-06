@@ -8,7 +8,7 @@ from nacl.exceptions import BadSignatureError
 from helpers.bot_client import run_bot, setup_bot
 from helpers.dynamodb_client import check_session, update_session
 
-# DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
+DISCORD_PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
 
 
 def lambda_handler(event, context):

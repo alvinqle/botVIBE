@@ -1,5 +1,44 @@
 {
-    "categories": {
-        
+    "max_player_count": {
+        "3": [
+            "Apex Legends"
+        ],
+        "4": [
+            "Battlefield",
+            "Escape Simulator",
+            "Fall Guys",
+            "Labyrinthine",
+            "Love Letter",
+            "Phasmophobia",
+            "PUBG",
+            "Trouble"
+        ],
+        "5": [
+            "CS:GO",
+            "Dead By Daylight",
+            "Monopoly Deal",
+            "Rainbow Six Siege",
+            "Valorant"
+        ],
+        "6": [
+            "Don't Starve Together",
+            "Project Zomboid"
+        ],
+        "7": [],
+        "8": [
+            "Pico Park",
+            "Shadow Hunters",
+            "Valheim"
+        ],
+        "9": [
+            "Among Us",
+            "Golf With Your Friends"
+        ],
+        "10": [
+            "Among Us",
+            "Golf With Your Friends",
+            "10-man CS",
+            "10-man Valorant"
+        ]
     }
 }
