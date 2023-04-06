@@ -298,9 +298,12 @@ class MiscellaneousCommands(commands.Cog, name='Miscellaneous Commands'):
             with open('./config/games.json') as games_file:
                 games_list = json.load(games_file)
             potential_games = []
-            for max_player_count, games in games_list['max_player_count'].items():
-                if player_count < int(max_player_count):
-                    potential_games.extend(games)
+            if player_count >= 10:
+                potential_games.extend(games_list['max_player_count']['10'])
+            else:
+                for max_player_count, games in games_list['max_player_count'].items():
+                    if player_count < int(max_player_count):
+                        potential_games.extend(games)
             await asyncio.sleep(1)
             await ctx.send(f'Why not play {potential_games[random.randint(0, len(potential_games) - 1)]}?')
         except Exception as e:
